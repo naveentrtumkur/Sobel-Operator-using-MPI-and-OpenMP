@@ -1,4 +1,4 @@
-# Use nvcc for compilation.
+# Use mpicc for compilation.
 CC := mpicc
 
 #flags to remove warning during compilation.
@@ -14,4 +14,5 @@ lab5p:$(Head)
 	$(CC) -o lab5p bmpReader.o tumkurrameshbabu_naveen_lab5p.c $(flags)
 clean :
 	rm -rf ./lab5p
+
 
