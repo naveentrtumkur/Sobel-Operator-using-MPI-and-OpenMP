@@ -13,10 +13,12 @@
 // Define master thread as 0
 #define MASTER	0
 
-// 16 other threads are required
+// Tested with 64 other threads for OMP usage.
 #define NUM_OF_THREADS 64 
 
-
+//Currently I'm not calling this function in main.
+//The problem statement is to use MPI and parallelise convergence loop
+//using OpenMP. This is done within the main program.
 /*
  *   Serial function.
  *   in_file - The input image file.
@@ -96,7 +98,7 @@ int main(int argc, char* argv[]) {
 	
 	//Define the blackcell count and global black cell count.
 	unsigned int  black_cell_count, global_black_cell_count;
-	int i, j, source;
+	int i, j, sourceProcess;
 	int type = 1;
 	uint32_t avg_rows, extra_rows, rows, start_row, end_row; 
 
@@ -105,20 +107,6 @@ int main(int argc, char* argv[]) {
 	MPI_Comm_size(MPI_COMM_WORLD, &slaves);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
-	// Serial version Master only will act on it(Only 1 thread MPI and no parallelization).
-	
-/*if (rank == MASTER) {
-		printf("\n**************************************************");
-		printf("\n\n** Serial version **\n\n");
-		clock_gettime(CLOCK_REALTIME, &start);
-		uint32_t serial_threshold = serial_processing(in_file);
-		clock_gettime(CLOCK_REALTIME, &end);
-		double time_taken_serial = ((double)end.tv_sec + 1.0e-9*end.tv_nsec) - \
-			((double)start.tv_sec + 1.0e-9*start.tv_nsec);
-		printf("\nTime taken for serial sobel operation: %lf sec",time_taken_serial);
-		printf("\nThreshold during convergence: %d", serial_threshold );
-	}
-*/	
 	// Barrier Let master finish the Serial version.
 	if (rank == MASTER) 
 	{	
@@ -126,7 +114,7 @@ int main(int argc, char* argv[]) {
 	        //printf("%d slaves are reading the image\n", slaves);
 	}
 	//Insert a barrier.
-//	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	// Parallel version
 	bmp_data = (uint8_t *) read_bmp_file(in_file);
@@ -144,7 +132,7 @@ int main(int argc, char* argv[]) {
 	global_black_cell_count = 0;
 
 	//put a barrier
-//	MPI_Barrier(MPI_COMM_WORLD);	
+	MPI_Barrier(MPI_COMM_WORLD);	
 	
 	if (rank == MASTER) {
 		clock_gettime(CLOCK_REALTIME, &start);
@@ -181,6 +169,7 @@ int main(int argc, char* argv[]) {
 				continue;
 			for (j = 1; j < (wd-1); j++)
 			{
+				//calculation of Gx and Gy values.
 				Gx = bmp_data[ (i-1)*wd + (j+1) ] - bmp_data[ (i-1)*wd + (j-1) ]
 					+ 2*bmp_data[ (i)*wd + (j+1) ] - 2*bmp_data[ (i)*wd + (j-1) ]
 					+ bmp_data[ (i+1)*wd + (j+1) ] - bmp_data[ (i+1)*wd + (j-1) ];
@@ -215,16 +204,16 @@ int main(int argc, char* argv[]) {
 	} 
 	//If it is a master thread receive the computation and image pixels from individual processes.
 	else if (rank == MASTER){
-		for (source = 1 ; source < slaves; source++) {
-			if(source == slaves -1)
+		for (sourceProcess = 1 ; sourceProcess < slaves; sourceProcess++) {
+			if(sourceProcess == slaves -1)
 			rows = avg_rows + extra_rows;
 			else
 			rows = avg_rows;
-			//rows  = (source== slaves-1) ? avg_rows + extra_rows : avg_rows;
-			start_row = source * avg_rows;
+			//rows  = (sourceProcess== slaves-1) ? avg_rows + extra_rows : avg_rows;
+			start_row = sourceProcess * avg_rows;
 
 	//Gather the image pixels values from the slaves.
-	MPI_Recv(&new_bmp_img[start_row * wd],  (rows)*wd, MPI_UNSIGNED_CHAR, source, type, 
+	MPI_Recv(&new_bmp_img[start_row * wd],  (rows)*wd, MPI_UNSIGNED_CHAR, sourceProcess, type, 
 				MPI_COMM_WORLD, &status);
 	//printf("Received the image from %d rank, rows = %d",rank, rows*wd);	
 	}
